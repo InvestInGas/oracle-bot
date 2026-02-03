@@ -1,22 +1,22 @@
 /**
  * Gas Price Fetcher
  * Fetches current gas prices from multiple EVM chains
+ * Returns prices in WEI for full precision
  */
 
-import { JsonRpcProvider, formatUnits } from 'ethers';
+import { JsonRpcProvider } from 'ethers';
 import { ChainConfig } from './config';
 
 export interface GasPriceData {
     chain: string;
-    priceGwei: number;
-    volatility24h: number;
-    high24h: number;
-    low24h: number;
+    priceWei: string;  // Wei as string for precision
+    high24h: string;
+    low24h: string;
     timestamp: number;
 }
 
-// Store historical prices for volatility calculation
-const priceHistory: Map<string, number[]> = new Map();
+// Store historical prices for 24h high/low calculation
+const priceHistory: Map<string, string[]> = new Map();
 const MAX_HISTORY_SIZE = 1000; // ~8 minutes at 0.5s intervals
 
 /**
@@ -25,33 +25,34 @@ const MAX_HISTORY_SIZE = 1000; // ~8 minutes at 0.5s intervals
 async function fetchChainGasPrice(chain: ChainConfig): Promise<GasPriceData | null> {
     try {
         const provider = new JsonRpcProvider(chain.rpcUrl);
-        const feeData = await provider.getFeeData();
 
-        if (!feeData.gasPrice) {
+        // Use direct eth_gasPrice call - single RPC request
+        const gasPrice = await provider.send('eth_gasPrice', []);
+
+        if (!gasPrice) {
             console.warn(`No gas price data for ${chain.name}`);
             return null;
         }
 
-        // Convert to gwei
-        const priceGwei = parseFloat(formatUnits(feeData.gasPrice, 'gwei'));
+        // Convert hex to wei string
+        const priceWei = BigInt(gasPrice).toString();
 
         // Update price history
         let history = priceHistory.get(chain.name) || [];
-        history.push(priceGwei);
+        history.push(priceWei);
         if (history.length > MAX_HISTORY_SIZE) {
             history = history.slice(-MAX_HISTORY_SIZE);
         }
         priceHistory.set(chain.name, history);
 
-        // Calculate statistics
+        // Calculate 24h high/low from history
         const stats = calculateStats(history);
 
         return {
             chain: chain.name,
-            priceGwei: Math.round(priceGwei),
-            volatility24h: Math.round(stats.stdDev),
-            high24h: Math.round(stats.max),
-            low24h: Math.round(stats.min),
+            priceWei,
+            high24h: stats.max,
+            low24h: stats.min,
             timestamp: Date.now(),
         };
     } catch (error) {
@@ -61,21 +62,23 @@ async function fetchChainGasPrice(chain: ChainConfig): Promise<GasPriceData | nu
 }
 
 /**
- * Calculate statistics from price history
+ * Calculate statistics from price history (wei strings)
  */
-function calculateStats(prices: number[]): { mean: number; stdDev: number; max: number; min: number } {
+function calculateStats(prices: string[]): { max: string; min: string } {
     if (prices.length === 0) {
-        return { mean: 0, stdDev: 0, max: 0, min: 0 };
+        return { max: '0', min: '0' };
     }
 
-    const mean = prices.reduce((a, b) => a + b, 0) / prices.length;
-    const squaredDiffs = prices.map(p => Math.pow(p - mean, 2));
-    const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / prices.length;
-    const stdDev = Math.sqrt(avgSquaredDiff);
-    const max = Math.max(...prices);
-    const min = Math.min(...prices);
+    let max = BigInt(prices[0]);
+    let min = BigInt(prices[0]);
 
-    return { mean, stdDev, max, min };
+    for (const price of prices) {
+        const p = BigInt(price);
+        if (p > max) max = p;
+        if (p < min) min = p;
+    }
+
+    return { max: max.toString(), min: min.toString() };
 }
 
 /**
@@ -92,17 +95,30 @@ export async function fetchAllGasPrices(chains: ChainConfig[]): Promise<GasPrice
 }
 
 /**
+ * Format wei to human-readable gwei (for display only)
+ */
+export function weiToGwei(weiStr: string): string {
+    const wei = BigInt(weiStr);
+    const gwei = Number(wei) / 1e9;
+    return gwei.toFixed(6);
+}
+
+/**
  * Check if a chain has a buy signal (price significantly below average)
  */
 export function detectBuySignal(data: GasPriceData): { isBuySignal: boolean; savingsPercent: number } {
-    const avg = (data.high24h + data.low24h) / 2;
-    if (avg === 0 || data.priceGwei >= avg) {
+    const price = BigInt(data.priceWei);
+    const high = BigInt(data.high24h);
+    const low = BigInt(data.low24h);
+
+    const avg = (high + low) / 2n;
+    if (avg === 0n || price >= avg) {
         return { isBuySignal: false, savingsPercent: 0 };
     }
 
-    const savingsPercent = Math.round(((avg - data.priceGwei) / avg) * 100);
+    const savings = Number(((avg - price) * 100n) / avg);
     return {
-        isBuySignal: savingsPercent > 10,
-        savingsPercent,
+        isBuySignal: savings > 10,
+        savingsPercent: Math.round(savings),
     };
 }

@@ -1,6 +1,7 @@
 /**
  * Sui Oracle Publisher
  * Publishes gas price data to the Sui blockchain
+ * Sends prices in WEI (u128) for full precision
  */
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
@@ -8,7 +9,7 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromBase64 } from '@mysten/sui/utils';
 import { Config } from './config';
-import { GasPriceData } from './fetcher';
+import { GasPriceData, weiToGwei } from './fetcher';
 
 export class SuiPublisher {
     private client: SuiClient;
@@ -61,9 +62,15 @@ export class SuiPublisher {
     }
 
     /**
-     * Publish a single gas price update
+     * Publish a single gas price update (price in wei)
      */
     async publishSingleUpdate(data: GasPriceData): Promise<string | null> {
+        // Skip zero prices - the contract rejects them
+        if (data.priceWei === '0') {
+            console.log(`Skipping ${data.chain}: price is 0`);
+            return null;
+        }
+
         try {
             const tx = new Transaction();
 
@@ -74,10 +81,9 @@ export class SuiPublisher {
                     tx.object(this.config.sui.oracleObjectId),
                     tx.object('0x6'), // Clock object
                     tx.pure.string(data.chain),
-                    tx.pure.u64(data.priceGwei),
-                    tx.pure.u64(data.volatility24h),
-                    tx.pure.u64(data.high24h),
-                    tx.pure.u64(data.low24h),
+                    tx.pure.u128(BigInt(data.priceWei)),
+                    tx.pure.u128(BigInt(data.high24h)),
+                    tx.pure.u128(BigInt(data.low24h)),
                 ],
             });
 
@@ -86,7 +92,7 @@ export class SuiPublisher {
                 transaction: tx,
             });
 
-            console.log(`Published ${data.chain}: ${data.priceGwei} gwei (tx: ${result.digest})`);
+            console.log(`Published ${data.chain}: ${data.priceWei} wei (${weiToGwei(data.priceWei)} gwei) (tx: ${result.digest})`);
             return result.digest;
         } catch (error) {
             console.error(`Error publishing ${data.chain}:`, error);
@@ -95,17 +101,22 @@ export class SuiPublisher {
     }
 
     /**
-     * Publish batch gas price updates
+     * Publish batch gas price updates (prices in wei)
      */
     async publishBatchUpdate(dataArray: GasPriceData[]): Promise<string | null> {
-        if (dataArray.length === 0) return null;
+        // Filter out zero prices - the contract rejects them
+        const validData = dataArray.filter(d => d.priceWei !== '0');
+
+        if (validData.length === 0) {
+            console.log('No valid prices to publish (all prices are 0)');
+            return null;
+        }
 
         try {
             const tx = new Transaction();
 
-            const chains = dataArray.map(d => d.chain);
-            const prices = dataArray.map(d => d.priceGwei);
-            const volatilities = dataArray.map(d => d.volatility24h);
+            const chains = validData.map(d => d.chain);
+            const pricesWei = validData.map(d => BigInt(d.priceWei));
 
             tx.moveCall({
                 target: `${this.config.sui.packageId}::oracle::batch_update_gas_prices`,
@@ -114,8 +125,7 @@ export class SuiPublisher {
                     tx.object(this.config.sui.oracleObjectId),
                     tx.object('0x6'), // Clock object
                     tx.pure.vector('string', chains),
-                    tx.pure.vector('u64', prices),
-                    tx.pure.vector('u64', volatilities),
+                    tx.pure.vector('u128', pricesWei),
                 ],
             });
 
@@ -124,7 +134,7 @@ export class SuiPublisher {
                 transaction: tx,
             });
 
-            const pricesSummary = dataArray.map(d => `${d.chain}:${d.priceGwei}`).join(', ');
+            const pricesSummary = validData.map(d => `${d.chain}:${weiToGwei(d.priceWei)}gwei`).join(', ');
             console.log(`Batch published [${pricesSummary}] (tx: ${result.digest})`);
             return result.digest;
         } catch (error) {

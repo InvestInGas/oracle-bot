@@ -7,7 +7,7 @@
 
 import 'dotenv/config';
 import { loadConfig, validateConfig } from './config';
-import { fetchAllGasPrices, detectBuySignal } from './fetcher';
+import { fetchAllGasPrices, detectBuySignal, weiToGwei } from './fetcher';
 import { SuiPublisher } from './publisher';
 
 async function main() {
@@ -79,14 +79,15 @@ async function main() {
                 return;
             }
 
-            // Log current prices
+            // Log current prices (show both wei and gwei for clarity)
             const timestamp = new Date().toLocaleTimeString();
             console.log(`\n[${timestamp}] Gas Prices:`);
 
             for (const price of prices) {
                 const signal = detectBuySignal(price);
                 const buyIndicator = signal.isBuySignal ? ` 🟢 BUY (${signal.savingsPercent}% savings)` : '';
-                console.log(`  ${price.chain.padEnd(10)}: ${price.priceGwei.toString().padStart(4)} gwei${buyIndicator}`);
+                const gweiDisplay = weiToGwei(price.priceWei);
+                console.log(`  ${price.chain.padEnd(10)}: ${price.priceWei} wei (${gweiDisplay} gwei)${buyIndicator}`);
             }
 
             // Publish to Sui (if configured)
