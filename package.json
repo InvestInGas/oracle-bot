@@ -1,7 +1,7 @@
 {
     "name": "gas-oracle-bot",
     "version": "1.0.0",
-    "description": "Oracle bot for InvestingAs - fetches EVM gas prices and publishes to Sui",
+    "description": "Oracle bot for InvestInGas - fetches EVM gas prices and publishes to Sui",
     "main": "dist/index.js",
     "scripts": {
         "build": "tsc",

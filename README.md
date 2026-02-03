@@ -59,7 +59,6 @@ See `.env.example` for all required variables:
 | Arbitrum | ETH | `https://arb1.arbitrum.io/rpc` |
 | Polygon | MATIC | `https://polygon-rpc.com` |
 | Optimism | ETH | `https://mainnet.optimism.io` |
-| Arc | USDC | `https://rpc.arc.io` |
 
 ## RPC Providers
 

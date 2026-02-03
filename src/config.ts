@@ -64,11 +64,6 @@ export function loadConfig(): Config {
                 rpcUrl: process.env.OPTIMISM_RPC || 'https://mainnet.optimism.io',
                 enabled: true,
             },
-            {
-                name: 'arc',
-                rpcUrl: process.env.ARC_RPC || 'https://rpc.arc.io',
-                enabled: true,
-            },
         ],
         updateIntervalMs: parseInt(process.env.UPDATE_INTERVAL_MS || '500'),
         batchSize: parseInt(process.env.BATCH_SIZE || '5'),
