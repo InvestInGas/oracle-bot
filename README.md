@@ -18,8 +18,10 @@ oracle-bot/
 ## How It Works
 
 1. **Fetch** - Queries gas prices from multiple EVM RPCs
-2. **Process** - Calculates volatility, high/low, buy signals
-3. **Publish** - Pushes updates to Sui oracle contract every 0.5s
+2. **Process** - Calculates 24h high/low and buy signals
+3. **Publish** - Pushes updates to Sui oracle contract every 30s
+
+> **Note:** Prices are stored in **wei** (u128) for full precision. Each chain's native gas token is tracked separately.
 
 ## Quick Start
 
@@ -50,14 +52,14 @@ See `.env.example` for all required variables:
 
 ## Supported Chains
 
-| Chain | RPC |
-|-------|-----|
-| Ethereum | `https://eth.llamarpc.com` |
-| Base | `https://mainnet.base.org` |
-| Arbitrum | `https://arb1.arbitrum.io/rpc` |
-| Polygon | `https://polygon-rpc.com` |
-| Optimism | `https://mainnet.optimism.io` |
-| Arc | `https://rpc.arc.io` |
+| Chain | Gas Token | Default RPC |
+|-------|-----------|-------------|
+| Ethereum | ETH | `https://eth.llamarpc.com` |
+| Base | ETH | `https://mainnet.base.org` |
+| Arbitrum | ETH | `https://arb1.arbitrum.io/rpc` |
+| Polygon | MATIC | `https://polygon-rpc.com` |
+| Optimism | ETH | `https://mainnet.optimism.io` |
+| Arc | USDC | `https://rpc.arc.io` |
 
 ## RPC Providers
 
